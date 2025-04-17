@@ -1,0 +1,180 @@
+{% extends 'base_client.html' %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <h1 class="text-3xl font-bold text-center mb-10 text-gray-900">🛒 Tu Carrito de Compras</h1>
+
+  <!-- Productos -->
+  <div id="cartItems" class="space-y-6">
+    {% for item in cart_items %}
+    <div class="cart-item bg-white shadow-lg rounded-lg p-6 flex justify-between items-center">
+      <div class="flex items-center space-x-6">
+        <img src="{{ item.image_url }}" alt="producto" class="w-20 h-20 object-cover rounded-lg">
+        <div>
+          <p class="text-xl font-semibold">{{ item.name }}</p>
+          <p class="text-gray-500">Precio: Bs{{ item.price }}</p>
+        </div>
+      </div>
+
+      <div class="text-center">
+        <p class="font-semibold">Cantidad: {{ item.quantity }}</p>
+        <p class="text-green-500">Total: {{ item.total_price }}</p>
+      </div>
+
+      <!-- Botón para eliminar el producto -->
+      <div class="text-right">
+        <button class="bg-red-500 hover:bg-red-400 text-white px-4 py-2 rounded-lg"
+          onclick="removeFromCart({{ item.id }})">
+          Eliminar
+        </button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Formulario usuario -->
+  <div class="mt-10 bg-white p-6 rounded-lg shadow-lg">
+    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Datos para el envío</h2>
+    <form id="userDataForm">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input type="text" id="name" placeholder="Nombre completo" required
+          class="p-3 border border-gray-300 rounded-lg w-full">
+        <input type="text" id="address" placeholder="Dirección" required
+          class="p-3 border border-gray-300 rounded-lg w-full">
+        <input type="email" id="email" placeholder="Correo electrónico" required
+          class="p-3 border border-gray-300 rounded-lg w-full">
+        <input type="tel" id="phone" placeholder="Teléfono" required
+          class="p-3 border border-gray-300 rounded-lg w-full">
+      </div>
+    </form>
+  </div>
+
+  <!-- Total y PayPal -->
+  <div class="mt-6 flex flex-col md:flex-row md:items-center justify-between space-y-4 md:space-y-0">
+    <p class="text-2xl font-bold text-right">Total a Pagar: {{ total }}</p>
+    <div id="paypalButtonContainer" class="w-full md:w-auto"></div>
+  </div>
+
+  <!-- Modal de confirmación -->
+  <div id="confirmationModal" class="fixed inset-0 bg-gray-500 bg-opacity-75 hidden flex justify-center items-center">
+    <div class="bg-white p-8 rounded-lg w-1/3 shadow-xl text-center">
+      <h2 class="text-2xl font-bold mb-4">¡Compra Exitosa!</h2>
+      <p class="text-lg mb-6">Gracias por tu compra. ¡Te esperamos pronto!</p>
+      <button id="closeModal" class="bg-red-500 hover:bg-red-400 text-white p-3 rounded-md">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Función para leer el total y productos en voz alta
+  function readTotal() {
+    const totalAmount = document.querySelector('.text-2xl').textContent; // Total a pagar
+    const cartItems = document.querySelectorAll('.cart-item');
+    let itemsText = "Tu carrito contiene los siguientes productos: ";
+
+    cartItems.forEach(item => {
+      const itemName = item.querySelector('.text-xl').textContent; // Nombre del producto
+      const itemQuantity = item.querySelector('.font-semibold').textContent; // Cantidad
+      const itemTotal = item.querySelector('.text-green-500').textContent; // Total del producto
+      itemsText += `${itemName}, ${itemQuantity}, ${itemTotal}. `;
+    });
+
+    // Usando la API de voz para leer el texto
+    const speech = new SpeechSynthesisUtterance();
+    speech.text = `${itemsText} ${totalAmount}. ¿Deseas proceder con el pago?`;
+    speech.lang = 'es-ES'; // Configuración del idioma español
+
+    // Seleccionar una voz personalizada
+    const voices = window.speechSynthesis.getVoices();
+    const selectedVoice = voices.find(voice => voice.name === 'Google español de España');
+    if (selectedVoice) {
+      speech.voice = selectedVoice;
+    }
+
+    window.speechSynthesis.speak(speech);
+  }
+
+  // Llamar a la función de lectura de voz cuando el carrito se haya cargado
+  document.addEventListener('DOMContentLoaded', function () {
+    readTotal(); // Llamamos la función al cargar la página
+  });
+
+  // Función para eliminar un producto del carrito
+  function removeFromCart(productId) {
+    fetch(`/remove_from_cart/${productId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: productId })
+    })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Actualizar el carrito en la interfaz
+          document.getElementById('cartItems').innerHTML = data.updated_cart_html;
+          alert('Producto eliminado del carrito.');
+          readTotal(); // Volver a leer el total después de eliminar un producto
+        } else {
+          alert('Hubo un problema al eliminar el producto.');
+        }
+      });
+  }
+
+  // Configuración de PayPal
+  paypal.Buttons({
+    style: {
+      shape: 'rect',
+      color: 'gold',
+      layout: 'vertical',
+      label: 'paypal',
+    },
+
+    createOrder: function (data, actions) {
+      const name = document.getElementById('name').value;
+      const address = document.getElementById('address').value;
+      return actions.order.create({
+        purchase_units: [{
+          description: `Pedido de ${name}, Dirección: ${address}`,
+          amount: {
+            currency_code: 'USD',
+            value: {{ total | float }},
+  }
+        }]
+      });
+    },
+
+  onApprove: function (data, actions) {
+    return actions.order.capture().then(function (details) {
+      const name = details.payer.name.given_name;
+      const amount = details.purchase_units[0].amount.value;
+
+      // 🟢 Notificación push visual
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("✅ Pago exitoso", {
+          body: `Gracias ${name}, se pagó $${amount} con éxito.`,
+          icon: "https://cdn-icons-png.flaticon.com/512/190/190411.png",
+        });
+      }
+
+      // 🗣️ Voz
+      const msg = new SpeechSynthesisUtterance(`Gracias ${name}, tu pago de ${amount} dólares fue exitoso.`);
+      msg.lang = 'es-ES';
+      window.speechSynthesis.speak(msg);
+
+      // 🎉 SweetAlert2
+      Swal.fire({
+        icon: 'success',
+        title: '¡Pago exitoso!',
+        text: `Gracias ${name}, se ha realizado un pago de $${amount}`,
+        confirmButtonColor: '#22c55e',
+        confirmButtonText: 'Continuar'
+      });
+    });
+  },
+
+  onError: function (err) {
+    alert("Hubo un error con el pago. Intenta nuevamente.");
+  }
+  }).render('#paypalButtonContainer');
+</script>
+
+{% endblock %}
