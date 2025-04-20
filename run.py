@@ -1,20 +1,21 @@
+import os
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from sqlalchemy import text
 from werkzeug.security import check_password_hash  # Usado para verificar contraseñas hash
 
-#C:/Users/Reyes/Desktop/1-2025/SI2/parcial1/theGit/ecomerceia/data/PostgreSQL/ecomerce.sql
+# Cargar variables de entorno desde .env
+load_dotenv()
 
 # Crear app y configurar CORS
 app = Flask(__name__)
-#CORS(app, origins=["http://localhost:3000"])
+# CORS(app, origins=["http://localhost:3000"])
 CORS(app, resources={r"/*": {"origins": "http://localhost:8080"}})
 
-
-# Configuración de PostgreSQL
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:1234@localhost:5432/ecomerciaia'
-
+# Configuración de PostgreSQL desde la variable de entorno
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Inicializar base de datos
@@ -26,6 +27,7 @@ class Usuario(db.Model):
     username = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False)
+
 # Modelo de Producto
 class Producto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -61,6 +63,7 @@ def add_producto():
     db.session.commit()
 
     return jsonify({"message": "Producto agregado exitosamente"}), 201
+
 @app.route('/carrito', methods=['POST'])
 def agregar_al_carrito():
     data = request.get_json()
@@ -89,6 +92,7 @@ def api_login():
             return jsonify({"success": False, "message": "Contraseña incorrecta"}), 401
     else:
         return jsonify({"success": False, "message": "Usuario no encontrado"}), 404
+
 # Ruta para registro
 @app.route('/register', methods=['POST'])
 def register():
@@ -112,4 +116,6 @@ def crear_pedido():
 
 # Punto de inicio
 if __name__ == '__main__':
-    app.run(debug=True)
+    debug = os.getenv('FLASK_ENV') == 'development'
+    app.run(debug=debug)
+
